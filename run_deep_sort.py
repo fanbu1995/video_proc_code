@@ -56,7 +56,7 @@ rooms_root = ['room230/', 'room324/', 'room351/','room352/']
 
 for wr in weeks_root:
 
-	for rm in rooms_root:
+    for rm in rooms_root:
         
         room_number = rm[4:7]
         

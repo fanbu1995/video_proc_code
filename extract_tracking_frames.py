@@ -17,6 +17,7 @@ import pickle
 
 import cv2
 
+from rename_dates import date2num
 
 #%%
 
@@ -25,7 +26,7 @@ def extract_one_video(video_dir, video_name, frame_bbox, save_dir=None,
                       frame_counter=1, every_n_seconds = 60, verbose=False):
     
     '''
-    frame_bbox: a dictionary of "frame number": bounding box vector (x, y, w, h)
+    frame_bbox: a dictionary of {"frame number": bounding box vector (x, y, w, h)}
     
     '''
     
@@ -93,7 +94,8 @@ def extract_one_video(video_dir, video_name, frame_bbox, save_dir=None,
                 ## save the image to "save_dir"
                 cv2.imwrite(os.path.join(save_dir, 
                                          "{:03d}.jpg".format(frame_counter)), frame)
-                frame_counter += 1
+            
+            frame_counter += 1
         
     return frame_counter
 
@@ -189,3 +191,79 @@ def extract_dir_video(video_dir, save_dir, meta_dir, output_fpath, every_n_secon
      
     # return the big info table
     return info
+
+#%%
+# run everything
+
+# set data root dir
+data_root = os.path.abspath('../data/')
+
+# set results file root dir
+save_root = os.path.abspath('../filetransfer/results1/')
+
+# set directory for deep sort output
+output_dir = os.path.abspath('../filetransfer/deep_sort_results/ds_output')
+#os.makedirs(output_dir)
+
+# set frame extraction root directory
+frames_dir = os.path.abspath('../filetransfer/check_frames')
+if not os.path.exists(frames_dir):
+    os.makedirs(frames_dir)
+
+# get all week folders
+weeks_root = os.listdir(data_root)
+weeks_root = [os.path.join(data_root,wr) for wr in weeks_root if wr.startswith('Week')]
+
+rooms_root = ['room230/', 'room324/', 'room351/','room352/']
+
+
+# storage for the big info table for human coders
+all_info = None
+
+# go through everything
+for wr in weeks_root:
+    for rm in rooms_root:
+        room_number = rm[4:7]
+        week_room_dir = os.path.abspath(os.path.join(wr, rm))
+        
+        dates = os.listdir(week_room_dir)
+        
+        for d in dates:
+            
+            room_date_dir = os.path.abspath(os.path.join(week_room_dir,d))
+            
+            # remove the space in date name
+            if ' ' in d:
+                d = ''.join(d.split()).lower()
+                
+            save_rd_dir = os.path.join(save_root, rm, date2num(d))
+            
+            if not os.path.exists(save_rd_dir):
+                raise OSError('The saving path {} does not exist!!'.format(save_rd_dir))
+                
+            if 'LRV' in os.listdir(room_date_dir):
+                video_dir = os.path.join(room_date_dir,"LRV/")
+            elif '100GOPRO' in os.listdir(room_date_dir):
+                video_dir = os.path.join(room_date_dir,"100GOPRO/","LRV/")
+            else:
+                continue
+            
+            output_rd_file = os.path.join(output_dir,room_number+"_"+d+".txt")
+            
+            room_date_info = extract_dir_video(video_dir, frames_dir, save_rd_dir, output_rd_file)
+            
+            if room_date_info:
+                if all_info is None:
+                    all_info = room_date_info
+                else:
+                    all_info = all_info.append(room_date_info)
+                    
+                # save along the way
+                pickle.dump(all_info, open('deep_sort_IDs_info.pkl','wb'))
+                all_info.to_csv('deep_sort_IDs_info.csv', index = False, index_label=False)
+        
+
+
+
+    
+    
