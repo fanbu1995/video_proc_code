@@ -17,18 +17,6 @@ import pickle
 
 import cv2
 
-#%%
-
-# example code to draw a bounding box on an image
-
-cv2.rectangle(img, (100,100),(400,400),(0,0,255),3) # red rectangle 
-
-# then can write it
-# cv2.imwrite([path], img)
-
-#pt1 = int(x), int(y)
-#pt2 = int(x + w), int(y + h)
-#cv2.rectangle(self.image, pt1, pt2, self._color, self.thickness)
 
 #%%
 
@@ -104,7 +92,7 @@ def extract_one_video(video_dir, video_name, frame_bbox, save_dir=None,
                 
                 ## save the image to "save_dir"
                 cv2.imwrite(os.path.join(save_dir, 
-                                         "{:06d}.jpg".format(frame_counter)), frame)
+                                         "{:03d}.jpg".format(frame_counter)), frame)
                 frame_counter += 1
         
     return frame_counter
@@ -118,11 +106,20 @@ def extract_one_video(video_dir, video_name, frame_bbox, save_dir=None,
 
 def extract_dir_video(video_dir, save_dir, meta_dir, output_fpath, every_n_seconds = 60, verbose = True):
     
+    '''
+    video_dir: directory of the video files to process and extract frames from
+    save_dir: the ROOT directory for saving those frames
+    output_fpath: the path to the ds_output file (.txt) from Deep Sort tracker
+    '''
+    
     # 0. try opening the deep sort output .txt file
+    #    and get the frames to extract
+    #    as well as the big data table (for the human coder's usage)
     try:
         ds_out = np.loadtxt(output_fpath, delimiter=",")
         if ds_out.size == 0:
             # if it's empty somehow
+            # print information and return NOTHING
             print('Output file {} is empty! No need to extract frames.'.format(output_fpath))
             return
         
@@ -132,7 +129,23 @@ def extract_dir_video(video_dir, save_dir, meta_dir, output_fpath, every_n_secon
         frames = ds_out[rows,0]
         boxes = ds_out[rows,2:6]
         
+        nframes = len(frames)
+        
         frame_bbox = dict(zip(frames,boxes))
+        
+        # get the big info table
+        room_date = os.path.splitext(os.path.split(output_fpath)[-1])[0]
+        room, date = room_date.split("_")
+        info = pd.DataFrame({'room': room, 
+                             'date': date,
+                             'frame_number': frames.astype(int),
+                             'deep_sort_ID': IDs,
+                             'real_ID': np.nan})
+    
+        # also create the sub-directory for saving frames
+        sub_save_dir = os.path.join(save_dir, room, date)
+        if not os.path.exists(sub_save_dir):
+            os.makedirs(sub_save_dir)
         
     except:
         raise OSError('Cannot open file at {}'.format(output_fpath))
@@ -143,7 +156,8 @@ def extract_dir_video(video_dir, save_dir, meta_dir, output_fpath, every_n_secon
         meta = pickle.load(open(os.path.join(meta_dir,'meta_data.pkl'),'rb'))
     else:
         # if meta_data file doesn't even exist, don't process this directory at all
-        return 0
+        # and return NOTHING
+        return
     
     # 2. process the video files that are not skipped
     
@@ -162,7 +176,7 @@ def extract_dir_video(video_dir, save_dir, meta_dir, output_fpath, every_n_secon
             if len(cands) > 0:
                 video_name = cands[0]
                 
-                frame_counter_update = extract_one_video(video_dir, video_name, frame_bbox, save_dir, 
+                frame_counter_update = extract_one_video(video_dir, video_name, frame_bbox, sub_save_dir, 
                                                          frame_counter, 60, verbose=False)
                 
                 if frame_counter_update:
@@ -171,6 +185,7 @@ def extract_dir_video(video_dir, save_dir, meta_dir, output_fpath, every_n_secon
                 #frame_counter = frame_one_video(video_dir, video_name, save_dir, frame_counter, 60, verbose=False)
                 
     if verbose:
-        print("Done processing and saved {} total frames! Frames saved to {}".format(frame_counter-1, save_dir))
-        
-    return 1
+        print("Done processing {} total frames and saved {} of them to {}".format(frame_counter-1, nframes, sub_save_dir))
+     
+    # return the big info table
+    return info
